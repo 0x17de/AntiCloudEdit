@@ -6,6 +6,8 @@ Just use this webservice to development your python applications.
 It will work on any python supporting platform with a network connection running
 - so that you can connect via web browser (be sure to not use this service in open networks yet!).
 
+![preview](http://www.icetruck.de/0/pics/anticloudedit.png)
+
 ## Features planned or already existent
 (*: working yet)
 - * create files
