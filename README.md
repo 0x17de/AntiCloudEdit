@@ -6,6 +6,14 @@ Just use this webservice to development your python applications.
 It will work on any python supporting platform with a network connection running
 - so that you can connect via web browser (be sure to not use this service in open networks yet!).
 
+## Hotkeys
+The edit pane has built-in hotkeys:
+- Ctrl+F : Find
+- Ctrl+H : Find & Replace
+- Ctrl+L : Goto line
+- ... please see ace.js homepage for an entire list.
+
+## Preview
 ![preview](http://www.icetruck.de/0/pics/anticloudedit.png)
 
 ## Features planned or already existent
