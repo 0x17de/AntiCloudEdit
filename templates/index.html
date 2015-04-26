@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<title>AntiCloudEdit</title>
+<link rel="stylesheet" type="text/css" href="/static/style.css" />
+<script src="/static/ace/ace.js" type="text/javascript" charset="utf-8"></script>
+<script type="text/javascript" src="/static/jquery-2.1.3.min.js"></script>
+
+    <!-- jQuery-contextmenu -->
+    <script src="/static/jquery-contextmenu/src/jquery.ui.position.js" type="text/javascript"></script>
+    <script src="/static/jquery-contextmenu/src/jquery.contextMenu.js" type="text/javascript"></script>
+    <script src="/static/jquery-contextmenu/screen.js" type="text/javascript"></script>
+    <script src="/static/jquery-contextmenu/prettify/prettify.js" type="text/javascript"></script>
+	<link href="/static/jquery-contextmenu/src/jquery.contextMenu.css" rel="stylesheet" type="text/css" />
+    <link href="/static/jquery-contextmenu/screen.css" rel="stylesheet" type="text/css" />
+    <link href="/static/jquery-contextmenu/prettify/prettify.sunburst.css" rel="stylesheet" type="text/css" />
+
+    <!-- jQuery-splitter -->
+	<script src="/static/jquery-splitter/js/jquery.splitter-0.14.0.js"></script>
+    <link href="/static/jquery-splitter/css/jquery.splitter.css" rel="stylesheet" />
+
+    <!-- jQuery-fileupload -->
+    <script src="/static/jquery-fileupload/js/vendor/jquery.ui.widget.js"></script>
+    <script src="/static/jquery-fileupload/js/jquery.fileupload.js"></script>
+
+<script>
+var editableFileTypes = {
+    'py':'python',
+    'txt':'text',
+    'xml':'xml',
+    'html':'html',
+    'js':'javascript',
+    'css':'css',
+    'sh':'sh'
+};
+var currentFile;
+function d2(n) {
+	if (n < 10) return "0"+n;
+	return n;
+}
+function consoleLog(text) {
+	var newLine = $('<div/>');
+	var d = new Date();
+	var dstr = d2(d.getHours())+":"+d2(d.getMinutes())+":"+d2(d.getSeconds())+" | " + text;
+	newLine.html(dstr);
+	$('#consoletext').append(newLine);
+
+	$('#console').scrollTop($('#consoletext').height()-$('#console').height()+20/*tolerance*/);
+}
+function logLog(text) {
+	var newLine = $('<div/>');
+	var d = new Date();
+	var dstr = d2(d.getHours())+":"+d2(d.getMinutes())+":"+d2(d.getSeconds())+" | " + text;
+	newLine.html(dstr);
+	$('#logtext').append(newLine);
+
+	$('#log').scrollTop($('#logtext').height()-$('#log').height()+20/*tolerance*/);
+}
+var requestFolderPath;
+var requestFilePath;
+var requestImportPath;
+function requestFile(path) {
+	requestFilePath = path;
+	$('#shade,#msgbox_file,#msgbox_parent').removeClass('invisible');
+}
+function requestImport(path) {
+	requestImportPath = path;
+	$('#fileupload').fileupload({
+        url: '/import/'+requestImportPath,
+        dataType: 'text',
+        done: function (e, data) {
+            $.each(data.result.files, function (index, file) {
+                $('<p/>').text(file.name).appendTo('#files');
+            });
+        },
+        progressall: function (e, data) {
+            var progress = parseInt(data.loaded / data.total * 100, 10);
+            $('#progress .progress-bar').css(
+                'width',
+                progress + '%'
+            );
+        }
+    }).prop('disabled', !$.support.fileInput)
+        .parent().addClass($.support.fileInput ? undefined : 'disabled');
+	$('#shade,#msgbox_import,#msgbox_parent').removeClass('invisible');
+}
+function cancelImport(path) {
+	$('#shade,#msgbox_import,#msgbox_parent').addClass('invisible');
+	loadTree($('#folder_root'), '/');
+}
+function closeAbout(path) {
+	$('#shade,#msgbox_about,#msgbox_parent').addClass('invisible');
+}
+function requestAbout(path) {
+	$('#shade,#msgbox_about,#msgbox_parent').removeClass('invisible');
+}
+function requestFolder(path) {
+	requestFolderPath = path;
+	$('#shade,#msgbox_folder,#msgbox_parent').removeClass('invisible');
+}
+function removeFolder(path) {
+	$.ajax('/folders'+path, {
+	method: 'DELETE',
+	success: function(result) {
+		loadTree($('#folder_root'), '/');
+	}});
+	cancelFolder();
+}
+function addFile() {
+	$.ajax('/files'+requestFilePath+$('#addfile_name').val(), {
+	method: 'PUT',
+	success: function(result) {
+		loadTree($('#folder_root'), '/');
+	}});
+	$('#addfile_name').val('');
+	cancelFile();
+}
+function addFolder() {
+	$.ajax('/folders'+requestFolderPath+$('#addfolder_name').val(), {
+	method: 'PUT',
+	success: function(result) {
+		loadTree($('#folder_root'), '/');
+	}});
+	$('#addfolder_name').val('');
+	cancelFolder();
+}
+function cancelFile() {
+	$('#msgbox_parent,#msgbox_file,#shade').addClass('invisible');
+}
+function cancelFolder() {
+	$('#msgbox_parent,#msgbox_folder,#shade').addClass('invisible');
+}
+function loadTree(folder, path) {
+	$.ajax('/folders'+path, {
+	success: function(result) {
+		var whereToAdd = folder.find('ul');
+		whereToAdd.remove();
+		var items = result.split('\r\n');
+
+		if (items.length > 0 && !(items.length == 1 && items[0] == '')) {
+			whereToAdd = $('<ul/>');
+			folder.append(whereToAdd);
+			$(items).each(function(index, line) {
+				var fileType = line[0];
+				var fileName = line.substr(1);
+	
+				var newItem = $('<li/>');
+				var newLabel = $('<div/>');
+	
+				newLabel.text(fileName);
+	
+				var fileRequest = path+fileName+"/";
+				newLabel.attr("data-filetype", fileType);
+				newLabel.attr("data-path", fileRequest);
+	
+				newItem.append(newLabel);
+				whereToAdd.append(newItem);
+
+				if (fileType == 'f') {
+				    newItem.addClass("tree-file");
+				    
+					var fileEnding;
+					var lastDot = fileName.lastIndexOf('.');
+					if (lastDot >= 0)
+						fileEnding = fileName.substr(lastDot+1);
+					if (editableFileTypes[fileEnding]) {
+						newLabel.click(function() {
+							loadFile($(this).attr("data-path"));
+						});
+					}
+				} else if (fileType == 'd') {
+				    newItem.addClass("tree-folder");
+					loadTree(newItem, fileRequest);
+				}
+			});
+		}
+	}});
+}
+function setEditorTileFromFilePath(name) {
+	name = name.split("/");
+	name[0] = "Files";
+	name = name.join(" > ");
+	$('#editortopbar_path').text(name);
+}
+function reloadFile() {
+	if (confirm("Reload?"))
+		loadFile(currentFile);
+}
+function saveFile() {
+	$.ajax('/files'+currentFile, {
+	method: 'POST',
+	contentType: "text/plain",
+	processData: false,
+	data: editor.getValue(),
+	dataType: 'text',
+	success: function(result) {
+		consoleLog("File saved: "+currentFile.substr(0,currentFile.length-1));
+	}});
+	
+}
+function loadFile(filename, bForceOpenAsText) {
+	currentFile = filename;
+	var printableName = filename.substr(0, filename.length-1);
+	consoleLog("Trying to load file: "+printableName);
+	$.ajax('/files'+filename, {
+	success: function(result) {
+		editor.setValue(result);
+		editor.moveCursorTo(0, 0);
+		if (bForceOpenAsText) {
+		    editor.getSession().setMode("ace/mode/text");
+		} else {
+		    var highlighter = 'text';
+		    var fileEnding;
+		    var lastDot = filename.lastIndexOf('.');
+		    if (lastDot >= 0)
+		        fileEnding = filename.substring(lastDot+1,filename.length-1);
+		    if (fileEnding)
+		        highlighter = editableFileTypes[fileEnding];
+    	    editor.getSession().setMode("ace/mode/"+highlighter);
+    	}
+		consoleLog("File loaded: "+printableName);
+		setEditorTileFromFilePath(printableName);
+	}});
+}
+var editor;
+$(document).ready(function() {
+	editor = ace.edit("editor");
+	editor.$blockScrolling = Infinity;
+	editor.setTheme("ace/theme/monokai");
+	editor.getSession().setMode("ace/mode/python");
+
+	$('#splitcontent').split({orientation:'vertical', limit:10, position: '22%'});
+	$('#splitconsole').split({orientation:'horizontal', limit:10, position: '80%'});
+	$('#splitlog').split({orientation:'vertical', limit:10, position: '50%'});
+	$.contextMenu({
+        selector: '.folder div:first-child[data-filetype="d"]', 
+        callback: function(key, options) {
+			var trigger = options.$trigger;
+            var dataPath = trigger.attr("data-path");
+			switch(key) {
+				case "download":
+					window.open('/files'+dataPath, '_blank');
+					break;
+				case "upload":
+					requestImport(dataPath);
+					break;
+				case "addFolder":
+					requestFolder(dataPath);
+					break;
+				case "addFile":
+					requestFile(dataPath);
+					break;
+				case "remove":
+					// @TODO: other dialog
+					if (confirm("Really delete object "+dataPath.substr(0, dataPath.length-1)+"?"))
+						removeFolder(dataPath);
+					break;
+			}
+        },
+        items: {
+            "addFile": {name: "Add File", icon: "add"},
+            "addFolder": {name: "Add Folder", icon: "add"},
+            "sep1": "---------",
+            "download": {name: "Download", icon: "download"},
+            "upload": {name: "Import", icon: "upload"},
+            "sep1": "---------",
+            "remove": {name: "Remove", icon: "delete"}
+        }
+    });
+	$.contextMenu({
+        selector: '.folder div:first-child[data-filetype="f"]', 
+        callback: function(key, options) {
+			var trigger = options.$trigger;
+            var dataPath = trigger.attr("data-path");
+			switch(key) {
+				case "download":
+					window.open('/files'+dataPath, '_blank');
+					break;
+				case "forceOpenAsText":
+				    loadFile(dataPath, true);
+				    break;
+				case "addFolder":
+					requestFolder(dataPath);
+					break;
+				case "addFile":
+					requestFile(dataPath);
+					break;
+				case "remove":
+					// @TODO: other dialog
+					if (confirm("Really delete object "+dataPath.substr(0, dataPath.length-1)+"?"))
+						removeFolder(dataPath);
+					break;
+			}
+        },
+        items: {
+            "addFile": {name: "Add File", icon: "add"},
+            "forceOpenAsText": {name: "Force open as text", icon: "edit"},
+            "sep1": "---------",
+            "download": {name: "Download", icon: "download"},
+            "sep1": "---------",
+            "remove": {name: "Remove", icon: "delete"}
+        }
+    });
+	loadTree($('#folder_root'), '/');
+	loadFile('/main.py/');
+});
+</script>
+</head>
+<body>
+
+<div class="toolbar">
+	<div class="toolbartitle">AntiCloudEdit</div>
+	<div onclick="reloadFile()" class="button">Reload</div>
+	<div onclick="saveFile()" class="button">Save</div>
+	<div onclick="requestAbout()" style="float:right" class="button">About</div>
+	<div style="clear:both;"></div>
+</div>
+<div class="bottomframe">
+	<div id="splitcontent">
+		<div id="filemanager">
+		<ul style='padding-left:1em'>
+	    <li class='folder tree-folder' id='folder_root'>
+			<div data-filetype="d" data-path="/">Files</div>
+		</li>
+		</ul>
+		</div>
+		<div id="splitconsole">
+			<div class="editorframe">
+				<div class="editortopbar">
+					<div id="editortopbar_path"></div>
+				</div>
+				<div id="editor"></div>
+			</div>
+			<div id="splitlog">
+    			<div id="consoleframe">
+    				<div class="consoletopbar">
+    					<div class="consoletopbartitle">
+    						Console
+    					</div>
+    					<div style="clear:both;"></div>
+    				</div>
+    				<div id="console">
+    					<div id="consoletext">
+    					</div>
+    					<div style="clear:both;"></div>
+    				</div>
+    			</div>
+    			<div id="logframe">
+    				<div class="logtopbar">
+    					<div class="logtopbartitle">
+    						Log
+    					</div>
+    					<div style="clear:both;"></div>
+    				</div>
+    				<div id="log">
+    					<div id="logtext">
+    					</div>
+    					<div style="clear:both;"></div>
+    				</div>
+    			</div>
+    		</div>
+		</div>
+	</div>
+</div>
+<div style="clear:both;"></div>
+<div id="shade" class="invisible"></div>
+<div id="msgbox_parent" class="invisible">
+<div id="msgbox_cell">
+	<div id="msgbox_about" class="msgbox invisible" style="height:21em">
+		<div class="msgbox_inner">
+			<div onclick="closeAbout()" style="cursor:pointer;position:relative;left:16pt;top:-16pt;width:15pt;height:15pt;background-color:#acaba3;">
+				x
+			</div>
+			<p><b>Manuel Herrmann</b></p>
+			<p><a href="http://0x17.de/" target="_blank">http://0x17.de</a></p>
+			<p>&nbsp;</p>
+			<p><b>Used libraries:</b></p>
+			<p><a href="http://www.cherrypy.org/" target="_blank">CherryPy</a> <a href="/static/cherrypy/LICENSE.txt" target="_blank">LICENSE</a></p>
+			<p><a href="http://jquery.com/" target="_blank">jQuery</a> <a href="/static/jquery/LICENSE.txt" target="_blank">LICENSE</a></p>
+			<p><a href="http://ace.c9.io/" target="_blank">ACE.js</a> <a href="/static/ace/LICENSE.txt" target="_blank">LICENSE</a></p>
+			<p><a href="https://github.com/medialize/jQuery-contextMenu" target="_blank">jQuery-contextMenu</a> <a href="/static/jquery-contextmenu/LICENSE.txt" target="_blank">LICENSE</a></p>
+			<p><a href="https://github.com/jcubic/jquery.splitter" target="_blank">jQuery Splitter</a> <a href="/static/jquery-splitter/LICENSE.txt" target="_blank">LICENSE</a></p>
+			<p><a href="https://blueimp.github.io/jQuery-File-Upload/" target="_blank">jQuery Fileupload</a> <a href="/static/jquery-fileupload/LICENSE.txt" target="_blank">LICENSE</a></p>
+			
+		</div>
+	</div>
+	<div id="msgbox_file" class="msgbox invisible" style="height:10em">
+		<div class="msgbox_inner">
+			<p>File name</p>
+			<input id="addfile_name" value="" /><br/>
+			<button onclick="addFile()">Add</button>
+			<button onclick="cancelFile()">Cancel</button>
+		</div>
+	</div>
+	<div id="msgbox_folder" class="msgbox invisible" style="height:10em">
+		<div class="msgbox_inner">
+			<p>Folder name</p>
+			<input id="addfolder_name" value="" /><br/>
+			<button onclick="addFolder()">Add</button>
+			<button onclick="cancelFolder()">Cancel</button>
+		</div>
+	</div>
+	<div id="msgbox_import" class="msgbox invisible" style="height:10em">
+		<div class="msgbox_inner">
+			<p>Drop zipfile below:</p>
+			<span class="btn btn-success fileinput-button">
+                <i class="glyphicon glyphicon-plus"></i>
+                <span>Select files...</span>
+                <!-- The file input field used as target for the file upload widget -->
+                <input id="fileupload" type="file" name="files[]" multiple>
+            </span>
+			<div id="files" class="files"></div>
+			<div id="progress" class="progress">
+                <div class="progress-bar progress-bar-success"></div>
+            </div>
+			<button onclick="cancelImport()">Cancel</button>
+		</div>
+	</div>
+</div>
+</div>
+</body>
+</html>
