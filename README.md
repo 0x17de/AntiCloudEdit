@@ -2,9 +2,8 @@
 Webserver based IDE for easy-to-use remote python development on e.g raspberry pi / intel edison or other devices.
 
 Many devices now think cloud platforms are required to code on your device.
-Just use this webservice to development your python applications.
-It will work on any python supporting platform with a network connection running
-- so that you can connect via web browser (be sure to not use this service in open networks yet!).
+Just use this webservice to develop your python/html/text applications - makefile support would be also a possibility in the future, as the syntax highlighter already supports various file types.
+It will work on any python supporting platform with a network connection running - so that you can connect via web browser (be sure to not use this service in open networks yet!).
 
 ## Hotkeys
 The edit pane has built-in hotkeys:
